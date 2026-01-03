@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ParkIn Aja - Smart Parking Telkom</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <link rel="stylesheet" href="style.css">
+
+</head>
+<body>
+
+    <div id="signin-page" class="auth-container">
+        <h2 style="color: var(--primary); margin: 0;">ParkIn Aja!</h2>
+        <p style="color: var(--text-muted); margin-bottom: 30px;">Masuk untuk mengelola reservasi parkir Anda</p>
+        <div class="input-group">
+            <label>Username</label>
+            <input type="text" id="login-username" placeholder="Masukkan Username Anda!">  
+        </div>
+        <div class="input-group">
+            <label>Password</label>
+            <input type="password" placeholder="••••••••">
+        </div>
+        <button class="btn-primary" onclick="handleLogin()">Masuk Sekarang</button>
+    </div>
+
+    <div id="main-dashboard">
+        <div class="dashboard-wrapper">
+            <div class="sidebar">
+                <h2 style="color: var(--primary); margin-bottom: 40px;">ParkIn Aja!</h2>
+                <nav>
+                    <p style="font-weight: 700; font-size: 0.75em; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">Menu Utama</p>
+                    <div id="menu-dash" class="nav-item active" onclick="switchMenu('dash')">📊 Dashboard</div>
+                    <div id="menu-res" class="nav-item" onclick="switchMenu('res')">📅 Reservasi Saya</div>
+                    <div id="menu-history" class="nav-item" onclick="switchMenu('history')">📜 History Parkir</div>
+                    <div id="menu-dev" class="nav-item" onclick="switchMenu('dev')">💻 Developer</div>
+                </nav>
+                <div style="font-weight: 600; color: var(--danger); cursor: pointer; padding: 12px 16px; margin-top: auto;" onclick="location.reload()">🚪 Logout</div>
+            </div>
+
+            <div class="main-content">
+                <div id="view-dash">
+                    <header style="margin-bottom: 40px;">
+                        <h1 id="welcome-msg" style="font-size: 2em; margin: 0;">Status Parkir Real-time</h1>
+                        <p style="color: var(--text-muted);">Monitoring 3 slot utama parkir Kampus</p>
+                    </header>
+
+                    <div class="slot-container" id="slots-display"></div>
+                    
+                    <div class="section-card">
+                        <h3 style="margin-top: 0;">Buat Reservasi Baru</h3>
+                        <p style="font-size: 0.9em; color: var(--text-muted); margin-bottom: 24px;">Reservasi hangus otomatis <b>30 menit setelah</b> waktu kedatangan.</p>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+                            <div class="input-group" style="margin-bottom:0;">
+                                <label>Identitas Aktif</label>
+                                <input type="text" id="display-user" readonly style="background: #f8fafc; color: var(--primary); font-weight: bold;">
+                            </div>
+                            <div class="input-group" style="margin-bottom:0;">
+                                <label>Pilih Slot Parkir</label>
+                                <select id="select-slot">
+                                    <option value="slot_1">Slot A1</option>
+                                    <option value="slot_2">Slot A2</option>
+                                    <option value="slot_3">Slot A3</option>
+                                </select>
+                            </div>
+                            <div class="input-group" style="margin-bottom:0;">
+                                <label>Waktu Kedatangan (Max 6 Jam ke Depan)</label>
+                                <input type="datetime-local" id="arrival-time">
+                            </div>
+                        </div>
+                        <button class="btn-primary" style="width: auto; padding: 14px 40px;" onclick="confirmBooking()">Konfirmasi Booking</button>
+                    </div>
+                </div>
+
+                <div id="view-res" class="hidden">
+                    <header style="margin-bottom: 40px;">
+                        <h1 style="font-size: 2em; margin: 0;">Reservasi Saya</h1>
+                    </header>
+                    <div id="no-res-content" class="section-card" style="text-align: center;">
+                        <p style="color: var(--text-muted);">Tidak ada reservasi aktif.</p>
+                    </div>
+                    <div id="active-res-content" class="res-card hidden" style="max-width: 500px; margin: auto; border-top-color: var(--orange);">
+                        <p style="font-weight: 700; font-size: 0.8em; color: var(--text-muted); text-transform: uppercase;">Batas Waktu Kedatangan (Grace Period)</p>
+                        <div class="timer-display" id="countdown-timer">30:00</div>
+                        <h2 id="res-slot-name" style="margin: 0;">Slot A1</h2>
+                        <p id="res-time-info" style="color: var(--text-muted); margin-top: 5px;"></p>
+                        <div class="status-badge"><span class="status-dot"></span>Menunggu Kedatangan</div>
+                        
+                        <button class="btn-outline-danger" onclick="cancelReservation()">Batalkan Reservasi</button>
+                    </div>
+                </div>
+
+                <div id="view-history" class="hidden">
+                    <header style="margin-bottom: 40px;">
+                        <h1 style="font-size: 2em; margin: 0;">History Parkir</h1>
+                    </header>
+
+                    <div class="section-card table-container">
+                        <table class="history-table">
+                            <thead>
+                                <tr>
+                                    <th>Waktu</th>
+                                    <th>Slot</th>
+                                    <th>ID Kartu (UID)</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="view-dev" class="hidden">
+                    <header style="margin-bottom: 40px;">
+                        <h1 style="font-size: 2em; margin: 0;">Tim Developer</h1>
+                        <p style="color: var(--text-muted);">Mahasiswa Teknik Telekomunikasi - Project Smart Parking</p>
+                    </header>
+
+                    <div class="dev-grid">
+                        <div class="dev-card">
+                            <img src="pas foto me.jpg" alt="Anggota 1" class="dev-photo">
+                            <h3 style="margin: 0px 0 5px 0;">Rakhandhiya Fasya Albana</h3>
+                            <p style="color: var(--text-muted); font-size: 0.85em; margin: 0;"></p>
+                        </div>
+                        <div class="dev-card">
+                            <img src="foto gita.jpeg" alt="Anggota 2" class="dev-photo">
+                            <h3 style="margin: 0px 0 5px 0;">Gita Rahma Budiarti</h3>
+                            <p style="color: var(--text-muted); font-size: 0.85em; margin: 0;"></p>
+                        </div>
+                        <div class="dev-card">
+                            <img src="foto syafa.jpeg" alt="Anggota 3" class="dev-photo">
+                            <h3 style="margin: 0px 0 5px 0;">Siti Nurhayati S</h3>
+                            <p style="color: var(--text-muted); font-size: 0.85em; margin: 0;"></p>
+                        </div>
+                        <div class="dev-card">
+                            <img src="foto rafgun.jpeg" alt="Anggota 4" class="dev-photo">
+                            <h3 style="margin: 0px 0 5px 0;">M Rafi Gunawan</h3>
+                            <p style="color: var(--text-muted); font-size: 0.85em; margin: 0;"></p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // 1. CONFIG & GLOBALS
+    const firebaseConfig = { databaseURL: "https://parkinaja-6d559-default-rtdb.asia-southeast1.firebasedatabase.app/" };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let currentActiveSlotKey = null;
+    let timerInterval = null;
+    let loggedInUser = null;
+    let loggedInUID = null;
+    const validUsers = { "Rakhan": "0788043B", "Gita": "22A873D9", "Syafa": "F7778706" };
+
+    // 2. LOGIN LOGIC
+    function handleLogin() {
+        const usernameInput = document.getElementById('login-username').value.trim();
+        const matchedName = Object.keys(validUsers).find(name => name.toLowerCase() === usernameInput.toLowerCase());
+
+        if (matchedName) {
+            loggedInUser = matchedName;
+            loggedInUID = validUsers[matchedName];
+            alert("Halo Selamat Datang! " + loggedInUser);
+            document.getElementById('welcome-msg').innerText = "Halo, " + loggedInUser + "!";
+            document.getElementById('display-user').value = loggedInUser + " (" + loggedInUID + ")";
+            updateDateTimeLimits();
+            showDashboard();
+        } else {
+            alert("Username tidak terdaftar!");
+        }
+    }
+
+    function updateDateTimeLimits() {
+        const now = new Date();
+        const maxTime = new Date(now.getTime() + 6 * 60 * 60 * 1000);
+        const formatLocal = (date) => {
+            const tzOffset = date.getTimezoneOffset() * 60000;
+            return new Date(date - tzOffset).toISOString().slice(0, 16);
+        };
+        const arrivalInput = document.getElementById('arrival-time');
+        arrivalInput.min = formatLocal(now);
+        arrivalInput.max = formatLocal(maxTime);
+        arrivalInput.value = formatLocal(now);
+    }
+    setInterval(updateDateTimeLimits, 60000);
+
+    // 3. REAL-TIME LISTENER
+    db.ref('parking_slots').on('value', (snapshot) => {
+        const slots = snapshot.val();
+        if (!slots) return;
+        const container = document.getElementById('slots-display');
+        container.innerHTML = '';
+        let activeFound = false;
+
+        for (let i = 1; i <= 3; i++) {
+            const key = `slot_${i}`;
+            const data = slots[key];
+            if (!data) continue;
+
+            let status = data.physical_status === 'occupied' ? 'occupied' : (data.is_reserved ? 'reserved' : 'available');
+            let label = data.physical_status === 'occupied' ? 'Terisi (Fisik)' : (data.is_reserved ? 'Dipesan (Web)' : 'Tersedia');
+
+            container.innerHTML += `
+                <div class="slot-card ${status}">
+                    <h3>Slot A${i}</h3>
+                    <div class="status-badge"><span class="status-dot"></span>${label}</div>
+                </div>`;
+
+            if (data.is_reserved && data.reserved_by_id === loggedInUID) {
+                activeFound = true;
+                currentActiveSlotKey = key;
+                document.getElementById('res-slot-name').innerText = `Slot A${i}`;
+                
+                // Gunakan arrival_timestamp jika ada, jika tidak fallback ke reservation_time
+                const targetTime = data.arrival_timestamp || data.reservation_time;
+                document.getElementById('res-time-info').innerText = `Rencana Kedatangan: ${new Date(targetTime).toLocaleTimeString()}`;
+                
+                startCountdown(targetTime); // Kirim target waktu kedatangan ke timer
+            }
+        }
+        document.getElementById('no-res-content').classList.toggle('hidden', activeFound);
+        document.getElementById('active-res-content').classList.toggle('hidden', !activeFound);
+    });
+
+    db.ref('history').limitToLast(10).on('value', (snapshot) => {
+        const historyData = snapshot.val();
+        const tableBody = document.getElementById('history-table-body');
+        tableBody.innerHTML = '';
+        if (historyData) {
+            Object.keys(historyData).reverse().forEach(key => {
+                const entry = historyData[key];
+                const dateObj = new Date(entry.timestamp); 
+                tableBody.innerHTML += `<tr>
+                    <td>${dateObj.toLocaleString('id-ID')}</td>
+                    <td style="font-weight:700; color:var(--primary);">${entry.slot || '-'}</td>
+                    <td><code>${entry.uid || '-'}</code></td>
+                    <td><span style="color:var(--green); font-weight:600;">● Selesai</span></td>
+                </tr>`;
+            });
+        }
+    });
+
+    // 4. BOOKING LOGIC
+    function confirmBooking() {
+        const slotKey = document.getElementById('select-slot').value;
+        const timeInput = document.getElementById('arrival-time').value;
+        if(!timeInput) return alert("Pilih waktu kedatangan!");
+
+        const arrivalTimestamp = new Date(timeInput).getTime();
+        const now = new Date().getTime();
+
+        db.ref(`parking_slots/${slotKey}`).once('value', (snap) => {
+            const val = snap.val();
+            if(val.is_reserved || val.physical_status === 'occupied') {
+                alert("Maaf, slot ini sudah terisi!");
+            } else if(confirm("Konfirmasi booking? Reservasi akan hangus otomatis 30 menit setelah jam kedatangan.")) {
+                db.ref(`parking_slots/${slotKey}`).update({
+                    is_reserved: true,
+                    reservation_time: Date.now(), // Waktu klik booking
+                    arrival_timestamp: arrivalTimestamp, // Waktu janjitemu kedatangan [NEW]
+                    reserved_by_id: loggedInUID
+                }).then(() => switchMenu('res'));
+            }
+        });
+    }
+
+    function cancelReservation() {
+        if(currentActiveSlotKey && confirm("Batalkan reservasi ini?")) {
+            db.ref(`parking_slots/${currentActiveSlotKey}`).update({ is_reserved: false, reservation_time: 0, arrival_timestamp: 0, reserved_by_id: "" }).then(() => switchMenu('dash'));
+        }
+    }
+
+    // 5. TIMER LOGIC (30 MENIT SETELAH KEDATANGAN) [NEW LOGIC]
+    function startCountdown(arrivalTime) {
+        clearInterval(timerInterval);
+        
+        // Target hangus = Waktu Kedatangan + 30 Menit (1.800.000 ms)
+        const expiryTime = arrivalTime + 1800000;
+
+        timerInterval = setInterval(() => {
+            const now = Date.now();
+            const diff = expiryTime - now; 
+
+            if (diff <= 0) {
+                clearInterval(timerInterval);
+                document.getElementById('countdown-timer').innerText = "HANGUS";
+                
+                // Otomatis hapus di Firebase jika waktu sudah lewat (Sisi Client)
+                db.ref(`parking_slots/${currentActiveSlotKey}`).update({
+                    is_reserved: false,
+                    arrival_timestamp: 0,
+                    reserved_by_id: ""
+                });
+                return;
+            }
+
+            const m = Math.floor(diff / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+            document.getElementById('countdown-timer').innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+            
+            // Beri warna merah jika sudah masuk masa tenggang (lewat jam kedatangan)
+            if (now > arrivalTime) {
+                document.getElementById('countdown-timer').style.color = 'var(--danger)';
+            } else {
+                document.getElementById('countdown-timer').style.color = 'var(--primary)';
+            }
+        }, 1000);
+    }
+
+    function showDashboard() { document.getElementById('signin-page').classList.add('hidden'); document.getElementById('main-dashboard').style.display = 'block'; document.body.style.alignItems = 'stretch'; }
+    function switchMenu(view) { ['dash', 'res', 'history', 'dev'].forEach(v => { document.getElementById('view-' + v).classList.toggle('hidden', v !== view); document.getElementById('menu-' + v).classList.toggle('active', v === view); }); }
+    function toggleAuth() { document.getElementById('signin-page').classList.toggle('hidden'); document.getElementById('signup-page').classList.toggle('hidden'); }
+    </script>
+</body>
+</html>
